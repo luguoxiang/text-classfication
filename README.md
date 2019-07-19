@@ -33,5 +33,5 @@ Word Embedding + CNN + 2 Dense layer
 
 ```
 python prepare_tv.py <documents root directory>
-python text_cls_deep.py <classify method>
+python text_cls_deep.py 
 ```
