@@ -1,6 +1,6 @@
 # text-classfication
 
-Put documents which need to be classfied under a directory, which each sub directory contains all documents belonging to certain category.
+Put documents which need to be classfied under a directory, which each sub directory contains all documents belonging to certain category. For example: https://www.sogou.com/labs/resource/cs.php
 ```
 python prepare_tf.py <documents root directory>
 python text_cls.py <classify method>
