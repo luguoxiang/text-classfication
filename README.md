@@ -11,3 +11,5 @@ python text_cls.py <classify method>
 | linear-svm | Linear SVM classifier |
 | random-forest | random forest classifier |
 | neural-network | single layer NN using tensorflow |
+
+The script will do three fold cross validation on the documents and print accuracy.
