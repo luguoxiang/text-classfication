@@ -1,0 +1,6 @@
+nltk
+jieba
+numpy
+scipy
+sklearn
+tensorflow
