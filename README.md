@@ -7,7 +7,7 @@ python prepare_tf.py <documents root directory>
 python text_cls.py <classify method>
 ```
 
-You can tunning the parameter in text_cls.py:
+You can tune the parameter in text_cls.py:
 
 ```
 classifier_map = {
