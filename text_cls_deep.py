@@ -1,6 +1,6 @@
 import numpy as np
-from keras.models import Sequential
-from keras import layers
+from tensorflow.keras.models import Sequential
+from tensorflow.keras import layers
 from sklearn.model_selection import train_test_split
 
 from numpy.random import seed
