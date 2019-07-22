@@ -14,7 +14,7 @@ classifier_map = {
    "naive-bayes": cls_naive_bayes(),
    "linear-svm": cls_linear_svm(C=1),
    "random-forest": cls_random_forest(max_term=5000, n_estimators=100),
-   "neural-network": cls_neural_network(learning_rate=0.01, n_epochs = 20, batch_size = 1000),
+   "neural-network": cls_neural_network(n_epochs = 20, batch_size = 1000),
 }
 ```
 
