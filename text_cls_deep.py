@@ -12,12 +12,21 @@ set_random_seed(2)
 loaded=np.load('data_tv.npz')
 
 data = loaded['data']
+embedding_matrix = loaded['embedding']
+target = loaded['target']
 print("Sparsity: {}".format(np.sum(data>0)/(data.shape[0]* data.shape[1])))
 
-train_X, test_X, train_y, test_y = train_test_split(data, loaded['target'], test_size=0.33, random_state=42)
+train_X, test_X, train_y, test_y = train_test_split(data, target, test_size=0.95, random_state=42)
 print(train_X.shape, test_X.shape, train_y.shape, test_y.shape)
 
-embedding_dim = 40
+unique, counts = np.unique(train_X, return_counts=True)
+
+word_count = embedding_matrix.shape[0]
+embedding_dim = embedding_matrix.shape[1]
+
+#word_filter = np.zeros(word_count)
+#np.put(word_filter, unique, counts)
+#embedding_matrix[word_filter<5,:] = 0
 
 CATEGORY_NUM = np.max(train_y) + 1
 DOC_MAX_LEN = train_X.shape[1]
@@ -27,8 +36,10 @@ model = Sequential()
 
 model.add(layers.Embedding(input_dim=VOCABULARY_SIZE, 
                            output_dim=embedding_dim, 
+                           weights=[embedding_matrix],
+                           trainable = False,
                            input_length=DOC_MAX_LEN))
-model.add(layers.Conv1D(128 , 5, activation='relu'))
+model.add(layers.Conv1D(128 , 8, activation='relu'))
 model.add(layers.GlobalMaxPooling1D())
 model.add(layers.Dense(64, activation='relu'))
 model.add(layers.Dense(CATEGORY_NUM, activation='softmax'))
@@ -39,9 +50,9 @@ model.summary()
 
 
 history = model.fit(train_X, train_y,
-                    epochs=10,
+                    epochs=15,
                     verbose=True,
-                    validation_data=(test_X, test_y),
+                    #validation_data=(test_X, test_y),
                     batch_size=1000)
 loss, accuracy = model.evaluate(train_X, train_y, verbose=False)
 print("Training Accuracy: {:.4f}".format(accuracy))

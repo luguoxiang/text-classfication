@@ -29,9 +29,12 @@ The script will do three fold cross validation on the documents and print accura
 
 # Deep learning text-classfication
 
-Word Embedding + CNN + 2 Dense layer
+Word2Vec Embedding + CNN + 2 Dense layer
 
 ```
+#Download wiki_zh: https://github.com/brightmart/nlp_chinese_corpus
+python prepare_word2vec_wiki.py -r wiki_zh/
+#Download: https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM/edit
 python prepare_tv.py <documents root directory>
 python text_cls_deep.py 
 ```
