@@ -60,7 +60,7 @@ def get_word_list(document):
     for current_type,segment in itertools.groupby(document.read(), ch_type):
         segment = ''.join(segment)
         if current_type == EN_CH and len(segment) > 1:
-            word_list.append(get_word_index(segment))
+            word_list.append(WORD_INDEX_ENGLISH)
         elif current_type == NUM_CH:
             word_list.append(WORD_INDEX_NUMBER)
         elif current_type == CN_CH:
@@ -111,28 +111,12 @@ weight_matrix = numpy.zeros((len(global_word_list), model.vector_size))
 ch_word_count = 0
 for i in range(len(global_word_list)):
     word = global_word_list[i]
-    if not word:
-        continue
-    
-    if i ==  WORD_INDEX_NUMBER:
-        weight_matrix[i] = model.wv[word]
-        
-    if ch_type(word[0])== CN_CH and word in model.wv:
+    if word in model.wv:
         weight_matrix[i] = model.wv[word]
         ch_word_count = ch_word_count + 1
 
-en_word_count = 0
 model = None
-print("loading en word2vec model...")
-model = gensim.models.KeyedVectors.load_word2vec_format("GoogleNews-vectors-negative300.bin", binary=True)
-for i in range(len(global_word_list)):
-    word = global_word_list[i]
-    if not word:
-        continue    
-    if ch_type(word[0])== EN_CH and word in model.wv:
-        weight_matrix[i] = model.wv[word]
-        en_word_count = en_word_count + 1
 
-print("data: {}, target: {}, embedding {}, ch_word_count {}, en_word_count {}".format(
-    data.shape, target.shape, weight_matrix.shape,ch_word_count, en_word_count))
+print("data: {}, target: {}, embedding {}, word_count {}".format(
+    data.shape, target.shape, weight_matrix.shape,ch_word_count))
 numpy.savez_compressed("data_tv", data=data, target=target, embedding=weight_matrix)

@@ -24,10 +24,6 @@ unique, counts = np.unique(train_X, return_counts=True)
 word_count = embedding_matrix.shape[0]
 embedding_dim = embedding_matrix.shape[1]
 
-#word_filter = np.zeros(word_count)
-#np.put(word_filter, unique, counts)
-#embedding_matrix[word_filter<5,:] = 0
-
 CATEGORY_NUM = np.max(train_y) + 1
 DOC_MAX_LEN = train_X.shape[1]
 VOCABULARY_SIZE = int(np.max([np.max(train_X), np.max(test_X)])) + 1
