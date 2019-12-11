@@ -4,10 +4,10 @@ from tensorflow.keras import layers
 from sklearn.model_selection import train_test_split
 
 from numpy.random import seed
-from tensorflow import set_random_seed
+import tensorflow
 
 seed(1)
-set_random_seed(2)
+tensorflow.random.set_seed(2)
 
 loaded=np.load('data_tv.npz')
 
