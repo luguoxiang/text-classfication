@@ -7,6 +7,7 @@ import jieba
 import numpy
 import scipy.sparse
 
+TEXT_ENCODING="utf-8"
 print("loading stop words...")
 nltk.download('stopwords')
 en_stop_words = set(nltk.corpus.stopwords.words('english'))
@@ -82,7 +83,7 @@ for cat_index in range(len(cat_list)): # iterate category
 		doc_cat.append(cat_index)
 
 		start_time = time.time()
-		with open(sample_path,'r', encoding='gb18030', errors='ignore') as sample_file:
+		with open(sample_path,'r', encoding=TEXT_ENCODING, errors='ignore') as sample_file:
 			word_list=get_word_list(sample_file)
 			for word,v in itertools.groupby(sorted(word_list)):
 				word_index=get_word_index(word)  
@@ -96,7 +97,7 @@ for cat_index in range(len(cat_list)): # iterate category
 	print("loading category: {}({}/{}), time: {}".format(
             cat_list[cat_index], cat_index +1, len(cat_list), process_time))
 
-doc_word_matrix=scipy.sparse.coo_matrix((data, (rows,cols)))
+doc_word_matri=scipy.sparse.coo_matrix((data, (rows,cols)))
 target_value=numpy.array(doc_cat)
 
 print("data shape:{}, target shape:{}".format(doc_word_matrix.shape, target_value.shape))

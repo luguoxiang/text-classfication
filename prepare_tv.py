@@ -8,6 +8,7 @@ import nltk.stem
 import string
 import numpy
 
+TEXT_ENCODING="utf-8"
 OTHER_CH=0
 CN_CH=1
 EN_CH=2
@@ -93,7 +94,7 @@ for cat_index in range(len(cat_list)): # iterate category
         doc_cat.append(cat_index)
 
         start_time = time.time()
-        with open(sample_path,'r', encoding='gb18030', errors='ignore') as sample_file:
+        with open(sample_path,'r', encoding=TEXT_ENCODING, errors='ignore') as sample_file:
             word_list=get_word_list(sample_file)
             doc_word_list.append(numpy.array(word_list))
             
