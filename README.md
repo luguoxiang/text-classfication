@@ -53,13 +53,10 @@ sudo /usr/local/bin/pip3 install jieba nltk boto3
  
 3. Create or config Spark cluster in AmazonEMR:
 
-Create spark cluster:
+* Create ssh key named spark-key for spark cluster(https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html#having-ec2-create-your-key-pair)
+* Create spark cluster:
 ```
 aws emr create-cluster --name "spark-cluster" --release-label emr-5.28.0 --applications Name=Spark --ec2-attributes KeyName=spark-key --instance-type m5.xlarge --instance-count 3 --use-default-roles  --bootstrap-actions Path="s3://...path to uploaded script file..."
-```
-or run following command for existing spark cluster
-```
-python spark/install_pylib.py "s3://...path to uploaded script file..."
 ```
 
 4. Login to spark master node and run
