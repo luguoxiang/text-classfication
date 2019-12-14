@@ -43,7 +43,7 @@ for index in range(len(all_objects)):
     files.append((name, index))
 
 print("Document count: %d" % len(files))
-print("Category count: " + len(cls_index_map))
+print("Category count: %d" % len(cls_index_map))
 doc_cls_map = sc.broadcast(doc_cls_map)
 
 files = sc.parallelize(files)
@@ -108,9 +108,7 @@ def transform(files, word_filtered):
     #    word_list[word_id] = word
     #word_list.append("Category")
     return doc_word_count.map(partial(to_word_vector, word_count)), word_filtered
-    
-    
-my_bucket = s3.Bucket('text-cls-data')
+
 
 training, test = files.randomSplit([0.6, 0.4])
 training, word_filtered = transform(training, None)
