@@ -1,6 +1,6 @@
 # text-classfication
 
-Put documents which need to be classfied under a directory, which each sub directory contains all documents belonging to certain category(The document should use usf-8 encoding, otherwise, you need to change TEXT_ENCODING variable in prepare_tf/tv.py spark/upload.py). 
+Put documents which need to be classfied under a directory, which each sub directory contains all documents belonging to certain category(The documents should use utf-8 encoding. if not, you need to change TEXT_ENCODING variable in prepare_tf/tv.py spark/upload.py). 
 ```
 pip install -r requirements.txt
 python prepare_tf.py <documents root directory>
