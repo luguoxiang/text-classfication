@@ -89,14 +89,13 @@ def to_word_vector(word_count, x):
     return LabeledPoint(doc_cls_map.value[doc_id], vector)
 
 word_count = None
-def transform(lines, word_filtered):
+def transform(files, word_filtered):
     global word_count
-    word_doc_count = lines.flatMap(get_words).map(lambda word_doc:(word_doc,1)).reduceByKey(lambda a, b: a + b).cache()
+    word_doc_count = files.flatMap(get_words).map(lambda word_doc:(word_doc,1)).reduceByKey(lambda a, b: a + b).cache()
     if not word_filtered:
         word_idf = word_doc_count.map(lambda x: (x[0][0], 1)).reduceByKey(lambda a, b: a + b)
         #word_tf = word_doc_count.map(lambda x: (x[0][0], x[1])).reduceByKey(lambda a, b: a + b)
-        #word_filtered = word_idf.filter(lambda x:x[1] >=5 and x[1] <= 0.3 * len(files))
-        word_filtered = word_idf
+        word_filtered = word_idf.filter(lambda x:x[1] >=5 and x[1] <= 0.3 * len(files))
         word_filtered = word_filtered.zipWithIndex().map(lambda x: (x[0][0], x[1])).cache()
         word_count = sc.broadcast(word_filtered.count())
     else:
