@@ -94,7 +94,7 @@ def to_word_vector(word_count, x):
     return LabeledPoint(doc_cls_map.value[doc_id], SparseVector(word_count.value, indexes, values))
 
 word_count = None
-def transform(files, word_filtered, tf_idf):
+def transform(files, word_filtered):
     global word_count
     word_doc_count = files.flatMap(get_words).map(lambda word_doc:(word_doc,1)).reduceByKey(lambda a, b: a + b).cache()
     doc_count = files.count()
@@ -102,11 +102,7 @@ def transform(files, word_filtered, tf_idf):
         word_idf = word_doc_count.map(lambda x: (x[0][0], 1)).reduceByKey(lambda a, b: a + b)
         word_filtered = word_idf.filter(lambda x:x[1] >=5 and x[1] <= 0.3 * doc_count)
         word_filtered = word_filtered.zipWithIndex()
-        if tf_idf:
-            mapFn = lambda x: (x[0][0], (x[1], math.log(doc_count / (x[0][1]+ 0.01))))
-            word_filtered = word_filtered.map(mapFn)
-        else:
-            word_filtered = word_filtered.map(lambda x: (x[0][0], (x[1], 1)))
+        word_filtered = word_filtered.map(lambda x: (x[0][0], (x[1], 1)))
         word_filtered = word_filtered.cache()
         word_count = sc.broadcast(word_filtered.count())
     else:
@@ -119,8 +115,8 @@ def transform(files, word_filtered, tf_idf):
 
 filesRDD = sc.parallelize(files)
 training, test = filesRDD.randomSplit([0.6, 0.4])
-training, word_filtered = transform(training, None, False)
-test, _ = transform(test, word_filtered, False)
+training, word_filtered = transform(training, None)
+test, _ = transform(test, word_filtered)
 model = NaiveBayes.train(training, 1.0)
 predictionAndLabel = test.map(lambda p: (model.predict(p.features), p.label))
 print("####################")
