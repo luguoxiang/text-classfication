@@ -91,10 +91,7 @@ def to_word_vector(word_count, x):
         indexes.append(word_id)
         values.append(od[word_id])
 
-    doc_id = x[0]
-    indexes.append(word_count.value)
-    values.append(doc_cls_map.value[doc_id])
-    return LabeledPoint(doc_cls_map.value[doc_id], SparseVector(word_count.value + 1, indexes, values))
+    return LabeledPoint(doc_cls_map.value[doc_id], SparseVector(word_count.value, indexes, values))
 
 word_count = None
 def transform(files, word_filtered, tf_idf):
