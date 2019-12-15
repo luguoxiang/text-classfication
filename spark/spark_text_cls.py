@@ -90,7 +90,7 @@ def to_word_vector(word_count, x):
     for word_id in sorted(od.keys()):
         indexes.append(word_id)
         values.append(od[word_id])
-
+    doc_id = x[0]
     return LabeledPoint(doc_cls_map.value[doc_id], SparseVector(word_count.value, indexes, values))
 
 word_count = None
