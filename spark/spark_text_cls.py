@@ -47,8 +47,6 @@ print("Document count: %d" % len(files))
 print("Category count: %d" % len(cls_index_map))
 doc_cls_map = sc.broadcast(doc_cls_map)
 
-files = sc.parallelize(files)
-
 print("loading stop words...")
 stop_obj = s3.Object("text-cls-data","stop.txt")
 stop_body = stop_obj.get()['Body'].read()
@@ -82,12 +80,18 @@ def get_words(file_info):
     return word_list
 
 def to_word_vector(word_count, x):
-    doc_id = x[0]
+    od = {}
+    for (word_id, count) in x[1]:
+        od[word_id] = count
+
     indexes = []
     values = []
-    for (word_id, count) in x[1]:
+
+    for word_id in sorted(od.keys()):
         indexes.append(word_id)
-        values.append(count)
+        values.append(od[word_id])
+
+    doc_id = x[0]
     indexes.append(word_count.value)
     values.append(doc_cls_map.value[doc_id])
     return LabeledPoint(doc_cls_map.value[doc_id], SparseVector(word_count.value + 1, indexes, values))
@@ -96,25 +100,28 @@ word_count = None
 def transform(files, word_filtered, tf_idf):
     global word_count
     word_doc_count = files.flatMap(get_words).map(lambda word_doc:(word_doc,1)).reduceByKey(lambda a, b: a + b).cache()
+    doc_count = files.count()
     if not word_filtered:
         word_idf = word_doc_count.map(lambda x: (x[0][0], 1)).reduceByKey(lambda a, b: a + b)
-        word_filtered = word_idf.filter(lambda x:x[1] >=5 and x[1] <= 0.3 * len(files)).zipWithIndex()
+        word_filtered = word_idf.filter(lambda x:x[1] >=5 and x[1] <= 0.3 * doc_count)
+        word_filtered = word_filtered.zipWithIndex()
         if tf_idf:
-            mapFn = lambda x: (x[0][0], x[1], math.log(len(files) / (x[0][1]+ 0.01)))
+            mapFn = lambda x: (x[0][0], (x[1], math.log(doc_count / (x[0][1]+ 0.01))))
             word_filtered = word_filtered.map(mapFn)
         else:
-            word_filtered = word_filtered.map(lambda x: (x[0][0], x[1], 1))
+            word_filtered = word_filtered.map(lambda x: (x[0][0], (x[1], 1)))
         word_filtered = word_filtered.cache()
         word_count = sc.broadcast(word_filtered.count())
     else:
         assert word_count
-    word_doc_count = word_doc_count.map(lambda x:(x[0][0],(x[0][1], x[1]))).join(word_filtered).map(lambda x:(x[1][1],x[1][0][0],x[1][0][1] * x[1][1][2]))
+    word_doc_count = word_doc_count.map(lambda x:(x[0][0],(x[0][1], x[1]))).join(word_filtered).map(lambda x:(x[1][1][0],x[1][0][0],x[1][0][1] * x[1][1][1]))
     doc_word_count = word_doc_count.map(lambda x: (x[1], (x[0], x[2]))).groupByKey()
 
     return doc_word_count.map(partial(to_word_vector, word_count)), word_filtered
 
 
-training, test = files.randomSplit([0.6, 0.4])
+filesRDD = sc.parallelize(files)
+training, test = filesRDD.randomSplit([0.6, 0.4])
 training, word_filtered = transform(training, None, False)
 test, _ = transform(test, word_filtered, False)
 model = NaiveBayes.train(training, 1.0)

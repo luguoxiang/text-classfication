@@ -61,6 +61,8 @@ aws emr create-cluster --name "spark-cluster" --release-label emr-5.28.0 --appli
 
 4. Login to spark master node and run
 ```
+sudo yum update -y
+sudo yum install git
 git clone http://github.com/luguoxiang/text-classfication.git
 spark-submit --deploy-mode client --master yarn text-classfication/spark/spark_text_cls.py
 ```
