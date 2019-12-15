@@ -1,5 +1,5 @@
 from pyspark import SparkContext
-from pyspark.sql import SparkSession
+from pyspark.mllib.linalg import SparseVector
 from pyspark.mllib.regression import LabeledPoint
 from pyspark.mllib.classification import NaiveBayes
 from functools import partial
@@ -82,11 +82,14 @@ def get_words(file_info):
 
 def to_word_vector(word_count, x):
     doc_id = x[0]
-    vector = [0] * word_count.value
+    indexes = []
+    values = []
     for (word_id, count) in x[1]:
-        vector[word_id] = count
-    vector.append(doc_cls_map.value[doc_id])
-    return LabeledPoint(doc_cls_map.value[doc_id], vector)
+        indexes.append(word_id)
+        values.append(count)
+    indexes.append(word_count.value)
+    values.append(doc_cls_map.value[doc_id])
+    return LabeledPoint(doc_cls_map.value[doc_id], SparseVector(word_count.value + 1, indexes, values))
 
 word_count = None
 def transform(files, word_filtered):
@@ -103,10 +106,6 @@ def transform(files, word_filtered):
     word_doc_count = word_doc_count.map(lambda x:(x[0][0],(x[0][1], x[1]))).join(word_filtered).map(lambda x:(x[1][1],x[1][0][0],x[1][0][1]))
     doc_word_count = word_doc_count.map(lambda x: (x[1], (x[0], x[2]))).groupByKey()
 
-    #word_list = [None] * word_count.value
-    #for (word, word_id) in word_filtered.collect():
-    #    word_list[word_id] = word
-    #word_list.append("Category")
     return doc_word_count.map(partial(to_word_vector, word_count)), word_filtered
 
 
