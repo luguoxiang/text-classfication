@@ -97,7 +97,7 @@ for cat_index in range(len(cat_list)): # iterate category
 	print("loading category: {}({}/{}), time: {}".format(
             cat_list[cat_index], cat_index +1, len(cat_list), process_time))
 
-doc_word_matri=scipy.sparse.coo_matrix((data, (rows,cols)))
+doc_word_matrix=scipy.sparse.coo_matrix((data, (rows,cols)))
 target_value=numpy.array(doc_cat)
 
 print("data shape:{}, target shape:{}".format(doc_word_matrix.shape, target_value.shape))
