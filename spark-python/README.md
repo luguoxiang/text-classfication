@@ -3,7 +3,7 @@
 1. Upload your documents to Amazon S3:
 ```
 git clone http://github.com/luguoxiang/text-classfication.git
-python spark/upload.py <documents root directory>
+python spark-python/upload.py <documents root directory>
 ```
 
 2. Create following script file and upload it to Amazon S3
@@ -26,7 +26,7 @@ aws emr create-cluster --name "spark-cluster" --release-label emr-5.28.0 --appli
 sudo yum update -y
 sudo yum install git
 git clone http://github.com/luguoxiang/text-classfication.git
-spark-submit --deploy-mode client --master yarn text-classfication/spark/spark_text_cls.py
+spark-submit --deploy-mode client --master yarn text-classfication/spark-python/spark_text_cls.py
 ```
 The command will train and validate a naive bayes classifier and print accurary:
 ```
