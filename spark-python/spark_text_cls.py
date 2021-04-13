@@ -1,4 +1,7 @@
 from pyspark import SparkContext
+from pyspark.sql.functions import lit
+from pyspark.sql.functions import col
+from pyspark.sql import SparkSession
 from pyspark.mllib.linalg import SparseVector
 from pyspark.mllib.regression import LabeledPoint
 from pyspark.mllib.classification import NaiveBayes
@@ -23,6 +26,7 @@ def ch_type(ch):
 
 
 sc = SparkContext(appName="TestApp")
+spark = SparkSession(sc)
 s3 = boto3.resource('s3')
 my_bucket = s3.Bucket('text-cls-data')
 
@@ -94,29 +98,36 @@ def to_word_vector(word_count, x):
     return LabeledPoint(doc_cls_map.value[doc_id], SparseVector(word_count.value, indexes, values))
 
 word_count = None
-def transform(files, word_filtered):
+def transform(files, word_filtered, tf_idf):
     global word_count
-    word_doc_count = files.flatMap(get_words).map(lambda word_doc:(word_doc,1)).reduceByKey(lambda a, b: a + b).cache()
+    word_doc = files.flatMap(get_words).toDF(["word","doc_id"])
+    word_doc_count = word_doc.groupBy("word","doc_id").count().cache()
+    
     doc_count = files.count()
     if not word_filtered:
-        word_idf = word_doc_count.map(lambda x: (x[0][0], 1)).reduceByKey(lambda a, b: a + b)
-        word_filtered = word_idf.filter(lambda x:x[1] >=5 and x[1] <= 0.3 * doc_count)
-        word_filtered = word_filtered.zipWithIndex()
-        word_filtered = word_filtered.map(lambda x: (x[0][0], (x[1], 1)))
-        word_filtered = word_filtered.cache()
+        word_idf = word_doc_count.withColumn("one", lit(1)).groupBy("word").sum("one").withColumnRenamed("SUM(one)", "idf")
+        word_filtered = word_idf.filter("idf >= 5 and idf <= %f" % (0.3 * doc_count ))
+        word_filtered = word_filtered.rdd.zipWithIndex()
+        if tf_idf:
+            mapFn = lambda x: (x[0][0], x[1], math.log(doc_count / (x[0][1]+ 0.01)))
+            word_filtered = word_filtered.map(mapFn)
+        else:
+            word_filtered = word_filtered.map(lambda x: (x[0][0], x[1], 1))
         word_count = sc.broadcast(word_filtered.count())
+        word_filtered = word_filtered.toDF(["word", "word_id", "w"]).cache()
     else:
         assert word_count
-    word_doc_count = word_doc_count.map(lambda x:(x[0][0],(x[0][1], x[1]))).join(word_filtered).map(lambda x:(x[1][1][0],x[1][0][0],x[1][0][1] * x[1][1][1]))
-    doc_word_count = word_doc_count.map(lambda x: (x[1], (x[0], x[2]))).groupByKey()
+    word_doc_count = word_doc_count.join(word_filtered, word_doc_count.word ==  word_filtered.word)
+    doc_word_weight = word_doc_count.withColumn("weight", (col("count") * col("w"))).select("doc_id", "word_id", "weight")
+    doc_word_weight = doc_word_weight.rdd.map(lambda x: (x[0], (x[1], x[2]))).groupByKey()
 
-    return doc_word_count.map(partial(to_word_vector, word_count)), word_filtered
+    return doc_word_weight.map(partial(to_word_vector, word_count)), word_filtered
 
 
 filesRDD = sc.parallelize(files)
 training, test = filesRDD.randomSplit([0.6, 0.4])
-training, word_filtered = transform(training, None)
-test, _ = transform(test, word_filtered)
+training, word_filtered = transform(training, None, False)
+test, _ = transform(test, word_filtered, False)
 model = NaiveBayes.train(training, 1.0)
 predictionAndLabel = test.map(lambda p: (model.predict(p.features), p.label))
 print("####################")
