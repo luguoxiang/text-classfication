@@ -9,14 +9,20 @@ export HADOOP_CONF_DIR=...
 spark-submit --class com.guoxiang.hdfs.TextClassifier --master yarn --deploy-mode client target/test-hdfs-jar-with-dependencies.jar
 ```
 
-The command will train and validate a naive bayes classifier and print accurary:
+The command will train and validate a svm classifier and print accurary:
 ```
-model accuracy 0.874113977884888
+Test set accuracy = 0.8976245210727969
 ```
 
-You can change to decision tree or random forest by changing following code in main:
+You can change to naive bayes or random forest by changing following code in main:
 ```
-        //random-forest, decision-tree, naive-bayes
-        new TextClassifier().classify("naive-bayes")
+        //randomForestClassifier, naiveBayes
+        linearSVC.fit(training).transform(test),
+```
+
+for naiveBayes, you also need to use TfTermWeight:
+```
+        var termWeight = new TfTermWeight()
+        //var termWeight = new TfIdfTermWeight()
 ```
 
