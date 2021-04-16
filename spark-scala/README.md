@@ -1,6 +1,6 @@
 # text-classfication using Spark ML and Hadoop yarn cluster
 
-Put documents which need to be classfied under a directory of Hadoop HDFS, which each sub directory contains all documents belonging to certain category(The documents should use utf-8 encoding.)
+Put documents which need to be classfied under a directory of Hadoop HDFS, which each sub directory contains all documents belonging to certain category
 
 ```
 mvn package
