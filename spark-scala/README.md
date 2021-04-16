@@ -25,11 +25,10 @@ for naiveBayes, you also need to use TfTermWeight:
         var termWeight = new TfTermWeight()
         //var termWeight = new TfIdfTermWeight()
 ```
-Also, change following const as your need:
+Also, change following const as your needs:
 ```
     val TEXT_BASE_DIR = "/news_text"
     val HDFS_URL = "hdfs://hadoop-master:9000"
     val HDFS_USER = "hduser"
-    val DICT_ENCODING = "utf-8"
     val TEXT_ENCODING = "gb2312"
 ```
