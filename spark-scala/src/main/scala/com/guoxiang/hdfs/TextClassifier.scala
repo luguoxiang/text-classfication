@@ -8,27 +8,28 @@ import opennlp.tools.stemmer.PorterStemmer
 import com.huaban.analysis.jieba.JiebaSegmenter
 import org.apache.spark.SparkConf
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.DataFrame
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.SparkContext
-import org.apache.spark.mllib.linalg.{Vector, SparseVector}
-import org.apache.spark.mllib.regression.LabeledPoint
-import org.apache.spark.mllib.classification.{NaiveBayes, NaiveBayesModel}
-import org.apache.spark.mllib.tree.{DecisionTree,RandomForest}
-import org.apache.spark.mllib.tree.model.{DecisionTreeModel, RandomForestModel}
-import scala.collection.JavaConverters._
-import TextClassifier.{
-        DecisionTreeClassifier, 
-        NaiveBayesClassifier, 
+import org.apache.spark.sql.SparkSession
+import org.apache.spark.ml.linalg.{Vector, SparseVector}
+import org.apache.spark.ml.classification.{
+        NaiveBayes, 
+        LinearSVC,
+        OneVsRest,
+        LogisticRegression,
+        DecisionTreeClassifier,
         RandomForestClassifier, 
-        Classifier
-    }
+        RandomForestClassificationModel,
+}
+import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
+import scala.collection.JavaConverters._
+import TextClassifier._
 
 import java.lang.Math
 
 @SerialVersionUID(1000L)
 class TextClassifier extends Serializable {
-
-    val TEXT_ENCODING = "utf-8"
     var cn_stop_words : Broadcast[Set[String]] = null
     var en_stop_words : Broadcast[Set[String]] = null
 
@@ -40,7 +41,7 @@ class TextClassifier extends Serializable {
         var reader : BufferedReader = null
         try {
             input = getClass.getResourceAsStream(path);
-            reader = new BufferedReader(new InputStreamReader(input, "utf-8"))
+            reader = new BufferedReader(new InputStreamReader(input, DICT_ENCODING))
             def readLines = Stream.continually( reader.readLine)
             readLines.takeWhile(_ != null).filter(_.strip().length() !=0)
                 .toSet
@@ -64,12 +65,12 @@ class TextClassifier extends Serializable {
             "[a-zA-Z]+|[\u4e00-\u9fa5]+".r
                 .findAllIn(new String(input.readAllBytes(), TEXT_ENCODING))
                 .flatMap(x => if(x(0) >= 0x4e00 && x(0) <= 0x9fa5) {
-                    TextClassifier.segmenter.process(x, JiebaSegmenter.SegMode.SEARCH)
+                    segmenter.process(x, JiebaSegmenter.SegMode.SEARCH)
                         .asScala
                         .map(_.word)
                         .filter(!cn_stop_words.value.contains(_))
                 } else {
-                    Array(TextClassifier.stemmer.stem(x.toLowerCase()))
+                    Array(stemmer.stem(x.toLowerCase()))
                         .filter(!en_stop_words.value.contains(_))
                 }).map((_, doc_id)) 
         } finally {
@@ -79,12 +80,12 @@ class TextClassifier extends Serializable {
         }
     }
     def connectHDFS() = {
-        FileSystem.get(new URI("hdfs://ubuntu-master:9000"), new Configuration(), "hduser") 
+        FileSystem.get(new URI(HDFS_URL), new Configuration(), HDFS_USER) 
     }
 
     def prepareFeatures(files: RDD[(Path, Int)],
             word_total_count: RDD[(String, (Long, Int))],
-            classifier : Classifier) = {
+            termWeight : TextClassifier.TermWeight) = {
 
         val doc_count = files.count()
         val word_doc_tf = files.mapPartitions(iterator => {
@@ -112,25 +113,24 @@ class TextClassifier extends Serializable {
             .map{case ((word, doc_id), termf) => (word, (doc_id, termf))}
             .join(word_dict)
             .map{case (word, ((doc_id, termf), (word_id, docf))) 
-                => (doc_id, (word_id, classifier.getTermWeight(termf, docf, doc_count)))}
+                => (doc_id, (word_id, termWeight.compute(termf, docf, doc_count)))}
             .groupByKey()
             .map{case (doc_id, wordList) => {
                 val sortedWords = wordList.iterator.toArray.sortBy{case (word_id, _) => word_id}
 
-                new LabeledPoint(doc_cls_map.value(doc_id), 
+                (doc_cls_map.value(doc_id), 
                     new SparseVector(dict_size, 
                         sortedWords.map{case (word_id, weight) => word_id.toInt}.toArray, 
                         sortedWords.map{case (word_id, weight) => weight}.toArray))
-            }}
+            }}.cache()
         (features, word_dict)
     }
-    def ptest(path: Path) = {
-        path
-    }
-    def classify(method : String) {
+
+    def classify(classification_fn: (DataFrame, DataFrame) => DataFrame,
+            termWeight : TextClassifier.TermWeight) {
         val hdfs = connectHDFS();
 
-        val classes = hdfs.listStatus(new Path("/news_text"))
+        val classes = hdfs.listStatus(new Path(TEXT_BASE_DIR))
             .filter(_.isDir)
             .map(_.getPath).zipWithIndex
 
@@ -145,9 +145,12 @@ class TextClassifier extends Serializable {
       
         printf("HADOOP_CONF_DIR=%s\n", System.getenv("HADOOP_CONF_DIR"))
         printf("YARN_CONF_DIR=%s\n", System.getenv("YARN_CONF_DIR"))
-        val conf = new SparkConf().setAppName("TextClassification")
 
-        val sc = new SparkContext(conf);
+        val spark =  SparkSession
+            .builder()
+            .appName("TextClassification")
+            .getOrCreate()
+        val sc: SparkContext = spark.sparkContext
 
         doc_cls_map = sc.broadcast(
             files.map{case (_, cls_index) => cls_index}.toArray)
@@ -161,29 +164,32 @@ class TextClassifier extends Serializable {
         printf("chinese stop words: %d\n", cn_stop_words.value.size)
 
         val Array(training, test) = documentsRDD.randomSplit(Array(0.6, 0.4))
-        var classifier : Classifier = null
-        if (method.equals("random-forest")) {
-            classifier = new RandomForestClassifier(classes.size)
-        } else if (method.equals("decision-tree")) {
-            classifier = new DecisionTreeClassifier(classes.size)
-        } else {
-            classifier = new NaiveBayesClassifier()
-        }
+
         val (trainingFeatures, word_total_count) = prepareFeatures(
-            training, null, classifier)
+            training, null, termWeight)
 
         val (testFeatures, _) = prepareFeatures(
-            test, word_total_count, classifier)
+            test, word_total_count, termWeight)
 
-        
-        classifier.fit(trainingFeatures)
-        val predictionAndLabel = testFeatures.map(
-            p => (classifier.predict(p.features), p.label))
-        println("####################")
-        val accuracy = predictionAndLabel.filter{
-            case (predicated, labled) => predicated == labled}.count().toDouble / testFeatures.count()
-        printf("model accuracy %f\n", accuracy)
-        println("####################")
+        println("Dictionary size %d".format(word_total_count.count()))
+
+        val trainingFeaturesDF =  spark
+            .createDataFrame(trainingFeatures)
+            .toDF(COLUMN_LABEL, COLUMN_FEATURES)
+        val testFeaturesDF =  spark
+            .createDataFrame(testFeatures)
+            .toDF(COLUMN_LABEL, COLUMN_FEATURES)
+
+        val predictions = classification_fn(
+            trainingFeaturesDF, testFeaturesDF)
+        predictions.show()
+
+        val evaluator = new MulticlassClassificationEvaluator()
+            .setLabelCol(COLUMN_LABEL)
+            .setPredictionCol("prediction")
+            .setMetricName("accuracy")
+        val accuracy = evaluator.evaluate(predictions)
+        println(s"Test set accuracy = $accuracy")
     }
 }
 
@@ -191,81 +197,53 @@ object TextClassifier {
     val stemmer = new PorterStemmer
     val segmenter = new JiebaSegmenter
 
-    trait Classifier extends Serializable{
-        def getTermWeight(tf: Int, df : Int, doc_count: Long) : Double
-        def fit(data : RDD[LabeledPoint]) 
-        def predict(p: Vector) : Int
-    }
+    val TEXT_BASE_DIR = "/news_text"
+    val HDFS_URL = "hdfs://hadoop-master:9000"
+    val HDFS_USER = "hduser"
+    val DICT_ENCODING = "utf-8"
+    val TEXT_ENCODING = "gb2312"
+    val COLUMN_FEATURES = "features"
+    val COLUMN_LABEL = "label"
 
-    class NaiveBayesClassifier extends Classifier{
-        var _model : NaiveBayesModel = null
-        def getTermWeight(tf: Int, docf : Int, doc_count: Long) = {
+    trait TermWeight extends Serializable{
+        def compute(tf: Int, df : Int, doc_count: Long) : Double
+    }
+    class TfTermWeight extends TermWeight{
+        def compute(tf: Int, docf : Int, doc_count: Long) = {
             tf.toDouble
         }
-
-        def fit(data : RDD[LabeledPoint]) {
-            _model = NaiveBayes.train(data, 1.0)
-        }
-
-        def predict(p: Vector) : Int = {
-            Math.round(_model.predict(p)).toInt
-        }
     }
-
-    class DecisionTreeClassifier(classes : Int) extends Classifier{
-        val _impurity = "gini"
-        val _maxDepth = 20
-        val _maxBins = 16
-        val _classes = classes
-        var _model : DecisionTreeModel = null
-
-        def getTermWeight(tf: Int, docf : Int, doc_count: Long) =  {
+    class TfIdfTermWeight extends TermWeight{
+        def compute(tf: Int, docf : Int, doc_count: Long) = {
             tf * Math.log((doc_count.toDouble + 1)/ (docf + 1))
         }
-
-        def fit(data : RDD[LabeledPoint]) {
-            _model = DecisionTree.trainClassifier(
-                    data, 
-                    _classes,
-                    Map[Int, Int](), //Empty indicates all features are continuous.
-                    _impurity, _maxDepth, _maxBins)
-        }
-        def predict(p: Vector) : Int = {
-            math.round(_model.predict(p)).toInt
-        }        
     }
 
-    class RandomForestClassifier(classes : Int) extends Classifier{
-        val _impurity = "gini"
-        val _maxDepth = 20
-        val _maxBins = 32
-        val _classes = classes
-        val _numTrees = 100
-        val _seed = 34567; 
-
-        var _model : RandomForestModel = null
-
-        def getTermWeight(tf: Int, docf : Int, doc_count: Long) =  {
-            tf * Math.log((doc_count.toDouble + 1)/ (docf + 1))
-        }
-
-        def fit(data : RDD[LabeledPoint]) {
-            _model = RandomForest.trainClassifier(
-                    data, 
-                    _classes,
-                    Map[Int, Int](), //Empty indicates all features are continuous.
-                    _numTrees, 
-                    // Let the algorithm choose, which set of features to be made as subsets
-                    "auto",
-                    _impurity, _maxDepth, _maxBins, _seed)
-        }
-        def predict(p: Vector) : Int = {
-            math.round(_model.predict(p)).toInt
-        }        
-    }
     def main(args: Array[String]) {
-        //random-forest, decision-tree, naive-bayes
-        new TextClassifier().classify("naive-bayes")
+        val randomForestClassifier = new RandomForestClassifier() 
+                .setMaxBins(16)
+                .setMaxDepth(30)
+                .setNumTrees(200)
+
+        val decisionTreeClassifier = new DecisionTreeClassifier()
+                .setMaxBins(16)
+                .setMaxDepth(20)
+
+        val naiveBayes = new NaiveBayes()
+        
+        val linearSVC = new OneVsRest().setClassifier(
+                new LinearSVC()
+                .setMaxIter(100)
+                .setRegParam(0.1)
+            )
+
+            
+        //var termWeight = new TfTermWeight()
+        var termWeight = new TfIdfTermWeight()
+
+        new TextClassifier().classify(
+            (training, test) => linearSVC.fit(training).transform(test),
+            termWeight)
     }
 }
 
